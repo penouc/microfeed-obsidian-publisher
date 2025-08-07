@@ -1,0 +1,10 @@
+{
+  "id": "microfeed-publisher",
+  "name": "Microfeed Publisher",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Publish your Obsidian notes to Microfeed with automatic magazine-style image generation and comprehensive media support",
+  "author": "Microfeed Community",
+  "authorUrl": "https://github.com/microfeed",
+  "isDesktopOnly": false
+}

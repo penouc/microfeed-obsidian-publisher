@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>朋克风格 - 高级时尚杂志</title>
+    <link href="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-100-M/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff0000;
+            --secondary: #000000;
+            --accent: #ffffff;
+            --background: #f5f5f5;
+            --text: #000000;
+            --heading-font: 'Noto Sans SC', sans-serif;
+            --body-font: 'Noto Sans SC', sans-serif;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: var(--body-font);
+            background: var(--background);
+            color: var(--text);
+        }
+        
+        .magazine-card {
+            width: 440px;
+            min-height: 600px;
+            max-height: 1280px;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 朋克风格样式 */
+        .magazine-card {
+            background: #f5f5f5;
+            padding: 30px;
+            border: 3px solid #000000;
+            position: relative;
+            transform: rotate(-1deg);
+            box-shadow: 5px 5px 0px #ff0000;
+        }
+        
+        .magazine-card::before {
+            content: 'PUNK';
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #ff0000;
+            color: white;
+            padding: 5px 15px;
+            transform: rotate(15deg);
+            font-weight: bold;
+            font-size: 12px;
+            border: 2px solid #000000;
+        }
+        
+        .magazine-card::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 30px;
+            height: 30px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="none" stroke="black" stroke-width="4"/><circle cx="50" cy="50" r="5" fill="black"/></svg>') no-repeat;
+        }
+
+        .date { 
+            font-size: 14px; 
+            color: #ff0000; 
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: bold;
+            transform: rotate(2deg);
+            background: #000000;
+            color: #ffffff;
+            padding: 5px 10px;
+            display: inline-block;
+        }
+
+        .title { 
+            font-size: 24px; 
+            font-weight: 900; 
+            line-height: 1.1; 
+            margin-bottom: 15px;
+            color: #000000;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+            background: linear-gradient(45deg, transparent 40%, #ff0000 40%, #ff0000 60%, transparent 60%);
+            background-size: 10px 10px;
+            padding: 10px;
+            transform: skew(-5deg);
+        }
+
+        .subtitle { 
+            font-size: 14px; 
+            color: #ff0000; 
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-left: 5px solid #000000;
+            padding-left: 10px;
+        }
+
+        .content { 
+            font-size: 13px; 
+            line-height: 1.5; 
+            margin-bottom: 20px;
+            color: #000000;
+            background: rgba(255,255,255,0.7);
+            padding: 15px;
+            border: 2px dashed #000000;
+            position: relative;
+        }
+
+        .content::before {
+            content: 'X';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 16px;
+            color: #ff0000;
+            font-weight: bold;
+        }
+
+        .quote { 
+            background: #000000;
+            color: #ffffff;
+            padding: 15px;
+            margin: 20px 0;
+            transform: rotate(1deg);
+            border: 3px solid #ff0000;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .quote::before {
+            content: '⚡';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            background: #ff0000;
+            color: #ffffff;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .key-points { 
+            list-style: none; 
+            padding: 0; 
+            background: #ffffff;
+            padding: 15px;
+            border: 3px solid #000000;
+            transform: rotate(-1deg);
+        }
+
+        .key-points li { 
+            margin-bottom: 8px; 
+            padding: 5px 10px;
+            background: linear-gradient(90deg, #ff0000 0%, #ff0000 20px, transparent 20px);
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            position: relative;
+        }
+
+        .key-points li:nth-child(even) {
+            background: linear-gradient(90deg, #000000 0%, #000000 20px, transparent 20px);
+        }
+
+        .qr-section { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 25px;
+            background: #000000;
+            padding: 10px;
+            border: 3px solid #ff0000;
+        }
+
+        .qr-code { 
+            width: 40px; 
+            height: 40px; 
+            filter: invert(1);
+            border: 2px solid #ffffff;
+        }
+
+        .editor-note { 
+            font-size: 11px; 
+            color: #ffffff; 
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 添加撕裂效果 */
+        .torn-effect {
+            position: relative;
+        }
+
+        .torn-effect::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 5px,
+                #000000 5px,
+                #000000 7px
+            );
+        }
+
+        /* 胶带效果 */
+        .tape-effect {
+            position: relative;
+        }
+
+        .tape-effect::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            right: 20px;
+            width: 50px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid #cccccc;
+            transform: rotate(-10deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="magazine-card torn-effect">
+        <div class="date">2024年8月7日</div>
+        
+        <h1 class="title">AI叛逆者：重塑设计的地下革命</h1>
+        
+        <h2 class="subtitle">当机器遇上朋克精神</h2>
+        
+        <div class="content tape-effect">
+            在这个被算法统治的世界里，真正的创作者正在发起一场静悄悄的革命。他们拒绝千篇一律的模板，用代码写诗，用像素发声...
+        </div>
+        
+        <blockquote class="quote">
+            "真正的艺术不是完美的，而是真实的。"
+        </blockquote>
+        
+        <ul class="key-points">
+            <li>拒绝主流，拥抱个性</li>
+            <li>DIY精神永不死</li>
+            <li>破坏中寻找新秩序</li>
+            <li>数字朋克的崛起</li>
+        </ul>
+        
+        <div class="qr-section">
+            <div class="editor-note">
+                UNDERGROUND · DIGITAL ZINE
+            </div>
+            <img src="https://cdn.titi.li/titi-li/production/media/image-c9127e43a0a860fe555a62a8fce628ad.jpg" alt="QR Code" class="qr-code" />
+        </div>
+    </div>
+
+    <div style="text-align: center; margin: 40px 0; color: #666;">
+        <h3 style="color: #ff0000; font-weight: bold;">🎸 朋克风格 - PUNK STYLE</h3>
+        <p>体现DIY精神和反叛文化，拒绝完美，拥抱原始与真实</p>
+    </div>
+</body>
+</html>
