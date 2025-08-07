@@ -3,6 +3,7 @@ import { MicrofeedSettings, MicrofeedSettingTab, DEFAULT_SETTINGS } from 'src/se
 import { ContentParser } from 'src/contentParser';
 import { ImageGenerator } from 'src/imageGenerator';
 import { MicrofeedClient } from 'src/microfeedClient';
+import { TwitterClient } from 'src/twitterClient';
 import { MicrofeedItem, ParsedContent, MediaFile } from 'src/types';
 
 export default class MicrofeedPlugin extends Plugin {
@@ -53,6 +54,24 @@ export default class MicrofeedPlugin extends Plugin {
       name: 'Test All Magazine Styles',
       callback: () => {
         this.testAllMagazineStyles();
+      }
+    });
+
+    // Add command for posting to Twitter only
+    this.addCommand({
+      id: 'post-to-twitter',
+      name: 'Post to Twitter/X',
+      callback: () => {
+        this.postToTwitter();
+      }
+    });
+
+    // Add command for publishing to Microfeed and Twitter
+    this.addCommand({
+      id: 'publish-to-microfeed-and-twitter',
+      name: 'Publish to Microfeed and Twitter/X',
+      callback: () => {
+        this.publishToMicrofeedAndTwitter();
       }
     });
 
@@ -194,7 +213,7 @@ export default class MicrofeedPlugin extends Plugin {
     );
   }
 
-  async publishNote(file: TFile, customOptions?: Partial<MicrofeedItem>): Promise<void> {
+  async publishNote(file: TFile, customOptions?: Partial<MicrofeedItem>, postToTwitter?: boolean): Promise<void> {
     // Validate settings
     if (!this.settings.apiUrl || !this.settings.apiKey) {
       new Notice('Please configure API URL and API Key in settings');
@@ -219,10 +238,40 @@ export default class MicrofeedPlugin extends Plugin {
       // Publish to Microfeed
       const result = await client.createItem(item);
       
+      // Get the published item URL
+      const itemUrl = `${this.settings.apiUrl}/items/${result.id}`;
+      
+      // Post to Twitter if requested and configured
+      let twitterResult = null;
+      const shouldPostToTwitter = postToTwitter ?? (this.settings.twitter.enabled && this.settings.twitter.autoPost);
+      
+      if (shouldPostToTwitter) {
+        try {
+          const twitterClient = new TwitterClient(this.settings.twitter);
+          if (twitterClient.isConfigured()) {
+            const tweetText = twitterClient.formatTweetText(
+              item.title,
+              itemUrl,
+              parsedContent.content.substring(0, 200)
+            );
+            twitterResult = await twitterClient.postTweet(tweetText);
+            new Notice('📱 Posted to Twitter/X!');
+          } else {
+            new Notice('⚠️ Twitter credentials not configured correctly');
+          }
+        } catch (twitterError) {
+          console.error('Twitter posting error:', twitterError);
+          new Notice(`⚠️ Posted to Microfeed but failed to post to Twitter: ${twitterError.message}`);
+        }
+      }
+      
       publishNotice.hide();
       new Notice('✅ Successfully published to Microfeed!');
       
       console.log('Published item:', result);
+      if (twitterResult) {
+        console.log('Twitter post:', twitterResult);
+      }
       
     } catch (error) {
       publishNotice.hide();
@@ -523,18 +572,80 @@ export default class MicrofeedPlugin extends Plugin {
       .replace(/<p><h([1-6])>/g, '<h$1>')
       .replace(/<\/h([1-6])><\/p>/g, '</h$1>');
   }
+
+  private async postToTwitter() {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      new Notice('No active markdown note found');
+      return;
+    }
+
+    const file = activeView.file;
+    if (!file) {
+      new Notice('No file found');
+      return;
+    }
+
+    if (!this.settings.twitter.enabled || !this.settings.twitter.bearerToken) {
+      new Notice('Twitter/X integration is not configured. Please check your settings.');
+      return;
+    }
+
+    const notice = new Notice('Posting to Twitter/X...', 0);
+
+    try {
+      const content = await this.app.vault.read(file);
+      const parsedContent = ContentParser.parseMarkdownContent(content, file.name);
+      
+      const twitterClient = new TwitterClient(this.settings.twitter);
+      
+      const tweetText = twitterClient.formatTweetText(
+        parsedContent.title,
+        '', // No Microfeed URL for Twitter-only posts
+        parsedContent.content.substring(0, 200)
+      );
+      
+      await twitterClient.postTweet(tweetText);
+      
+      notice.hide();
+      new Notice('📱 Successfully posted to Twitter/X!');
+      
+    } catch (error) {
+      notice.hide();
+      new Notice(`❌ Failed to post to Twitter: ${error.message}`);
+      console.error('Twitter posting error:', error);
+    }
+  }
+
+  private async publishToMicrofeedAndTwitter() {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      new Notice('No active markdown note found');
+      return;
+    }
+
+    const file = activeView.file;
+    if (!file) {
+      new Notice('No file found');
+      return;
+    }
+
+    await this.publishNote(file, undefined, true);
+  }
 }
 
 class PublishOptionsModal extends Modal {
   plugin: MicrofeedPlugin;
   file: TFile;
   status: 'published' | 'unpublished' | 'unlisted' = 'published';
+  postToTwitter: boolean = false;
 
   constructor(app: App, plugin: MicrofeedPlugin, file: TFile) {
     super(app);
     this.plugin = plugin;
     this.file = file;
     this.status = plugin.settings.defaultStatus;
+    this.postToTwitter = plugin.settings.twitter.enabled && plugin.settings.twitter.autoPost;
   }
 
   onOpen() {
@@ -562,6 +673,22 @@ class PublishOptionsModal extends Modal {
       this.status = (e.target as HTMLSelectElement).value as any;
     });
 
+    // Twitter posting option
+    if (this.plugin.settings.twitter.enabled) {
+      const twitterContainer = contentEl.createDiv();
+      twitterContainer.createEl('label', { text: 'Post to Twitter/X:' });
+      
+      const twitterToggle = twitterContainer.createEl('input', {
+        type: 'checkbox',
+        cls: 'checkbox'
+      });
+      twitterToggle.checked = this.postToTwitter;
+      
+      twitterToggle.addEventListener('change', (e) => {
+        this.postToTwitter = (e.target as HTMLInputElement).checked;
+      });
+    }
+
     // Buttons
     const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
     
@@ -574,7 +701,7 @@ class PublishOptionsModal extends Modal {
     });
     publishButton.addEventListener('click', async () => {
       this.close();
-      await this.plugin.publishNote(this.file, { status: this.status });
+      await this.plugin.publishNote(this.file, { status: this.status }, this.postToTwitter);
     });
   }
 

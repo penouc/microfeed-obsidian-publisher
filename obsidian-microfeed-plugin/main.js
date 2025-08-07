@@ -24,6 +24,101 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/twitterClient.ts
+var twitterClient_exports = {};
+__export(twitterClient_exports, {
+  TwitterClient: () => TwitterClient
+});
+var import_obsidian2, TwitterClient;
+var init_twitterClient = __esm({
+  "src/twitterClient.ts"() {
+    import_obsidian2 = require("obsidian");
+    TwitterClient = class {
+      constructor(settings) {
+        this.baseUrl = "https://api.twitter.com/2";
+        this.settings = settings;
+      }
+      isConfigured() {
+        return !!(this.settings.apiKey && this.settings.apiSecret && this.settings.accessToken && this.settings.accessTokenSecret && this.settings.bearerToken);
+      }
+      async postTweet(text) {
+        if (!this.isConfigured()) {
+          throw new Error("Twitter API credentials are not configured");
+        }
+        try {
+          const response = await (0, import_obsidian2.requestUrl)({
+            url: `${this.baseUrl}/tweets`,
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${this.settings.bearerToken}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              text
+            })
+          });
+          if (response.status < 200 || response.status >= 300) {
+            throw new Error(`Twitter API error: ${response.status} ${response.text}`);
+          }
+          return response.json;
+        } catch (error) {
+          console.error("Error posting to Twitter:", error);
+          throw error;
+        }
+      }
+      async testConnection() {
+        if (!this.isConfigured()) {
+          return false;
+        }
+        try {
+          const response = await (0, import_obsidian2.requestUrl)({
+            url: `${this.baseUrl}/users/me`,
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${this.settings.bearerToken}`
+            }
+          });
+          return response.status >= 200 && response.status < 300;
+        } catch (error) {
+          console.error("Twitter connection test failed:", error);
+          return false;
+        }
+      }
+      formatTweetText(title, url, summary) {
+        let tweet = "";
+        switch (this.settings.postFormat) {
+          case "title_only":
+            tweet = title;
+            break;
+          case "title_with_link":
+            tweet = `${title} ${url}`;
+            break;
+          case "title_with_summary":
+            const truncatedSummary = summary ? this.truncateText(summary, 100) : "";
+            tweet = `${title}
+
+${truncatedSummary}
+${url}`;
+            break;
+        }
+        if (this.settings.includeHashtags && this.settings.customHashtags) {
+          const hashtags = this.settings.customHashtags.split(",").map((tag) => tag.trim()).filter((tag) => tag.startsWith("#")).join(" ");
+          if (hashtags) {
+            tweet += ` ${hashtags}`;
+          }
+        }
+        return this.truncateText(tweet, 280);
+      }
+      truncateText(text, maxLength) {
+        if (text.length <= maxLength) {
+          return text;
+        }
+        return text.substring(0, maxLength - 3) + "...";
+      }
+    };
+  }
+});
+
 // src/styleManager.ts
 var styleManager_exports = {};
 __export(styleManager_exports, {
@@ -1435,10 +1530,10 @@ __export(main_exports, {
   default: () => MicrofeedPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/microfeedClient.ts
 var import_obsidian = require("obsidian");
@@ -1604,9 +1699,21 @@ var DEFAULT_SETTINGS = {
   apiKey: "",
   defaultStatus: "published",
   autoGenerateImage: true,
-  imageTemplate: "detailed"
+  imageTemplate: "detailed",
+  twitter: {
+    apiKey: "",
+    apiSecret: "",
+    accessToken: "",
+    accessTokenSecret: "",
+    bearerToken: "",
+    enabled: false,
+    autoPost: false,
+    postFormat: "title_with_link",
+    includeHashtags: false,
+    customHashtags: "#microfeed"
+  }
 };
-var MicrofeedSettingTab = class extends import_obsidian2.PluginSettingTab {
+var MicrofeedSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1615,18 +1722,18 @@ var MicrofeedSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Microfeed Publisher Settings" });
-    new import_obsidian2.Setting(containerEl).setName("Microfeed API URL").setDesc("The base URL of your Microfeed instance").addText((text) => text.setPlaceholder("https://your-domain.com").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
+    new import_obsidian3.Setting(containerEl).setName("Microfeed API URL").setDesc("The base URL of your Microfeed instance").addText((text) => text.setPlaceholder("https://your-domain.com").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
       this.plugin.settings.apiUrl = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("Your Microfeed API key (get it from /admin/settings/)").addText((text) => {
+    new import_obsidian3.Setting(containerEl).setName("API Key").setDesc("Your Microfeed API key (get it from /admin/settings/)").addText((text) => {
       text.inputEl.type = "password";
       text.setPlaceholder("Enter your API key").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value;
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Test Connection").setDesc("Test your API connection").addButton((button) => button.setButtonText("Test Connection").setCta().onClick(async () => {
+    new import_obsidian3.Setting(containerEl).setName("Test Connection").setDesc("Test your API connection").addButton((button) => button.setButtonText("Test Connection").setCta().onClick(async () => {
       const { apiUrl, apiKey } = this.plugin.settings;
       if (!apiUrl || !apiKey) {
         this.showNotice("Please configure API URL and API Key first", "error");
@@ -1649,25 +1756,109 @@ var MicrofeedSettingTab = class extends import_obsidian2.PluginSettingTab {
         button.setDisabled(false);
       }
     }));
-    new import_obsidian2.Setting(containerEl).setName("Default Publication Status").setDesc("Default status for published items").addDropdown((dropdown) => dropdown.addOption("published", "Published").addOption("unlisted", "Unlisted").addOption("unpublished", "Unpublished").setValue(this.plugin.settings.defaultStatus).onChange(async (value) => {
+    new import_obsidian3.Setting(containerEl).setName("Default Publication Status").setDesc("Default status for published items").addDropdown((dropdown) => dropdown.addOption("published", "Published").addOption("unlisted", "Unlisted").addOption("unpublished", "Unpublished").setValue(this.plugin.settings.defaultStatus).onChange(async (value) => {
       this.plugin.settings.defaultStatus = value;
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("h3", { text: "Image Generation" });
-    new import_obsidian2.Setting(containerEl).setName("Auto-generate thumbnails").setDesc("Automatically generate thumbnail images for posts without images").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoGenerateImage).onChange(async (value) => {
+    new import_obsidian3.Setting(containerEl).setName("Auto-generate thumbnails").setDesc("Automatically generate thumbnail images for posts without images").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoGenerateImage).onChange(async (value) => {
       this.plugin.settings.autoGenerateImage = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Image Template").setDesc("Choose the style for auto-generated images").addDropdown((dropdown) => dropdown.addOption("simple", "Simple (title only)").addOption("detailed", "Detailed (title + content preview)").setValue(this.plugin.settings.imageTemplate).onChange(async (value) => {
+    new import_obsidian3.Setting(containerEl).setName("Image Template").setDesc("Choose the style for auto-generated images").addDropdown((dropdown) => dropdown.addOption("simple", "Simple (title only)").addOption("detailed", "Detailed (title + content preview)").setValue(this.plugin.settings.imageTemplate).onChange(async (value) => {
       this.plugin.settings.imageTemplate = value;
       await this.plugin.saveSettings();
     }));
+    containerEl.createEl("h3", { text: "Twitter/X Integration" });
+    new import_obsidian3.Setting(containerEl).setName("Enable Twitter/X Integration").setDesc("Allow posting to Twitter/X when publishing content").addToggle((toggle) => toggle.setValue(this.plugin.settings.twitter.enabled).onChange(async (value) => {
+      this.plugin.settings.twitter.enabled = value;
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    if (this.plugin.settings.twitter.enabled) {
+      new import_obsidian3.Setting(containerEl).setName("Twitter API Key").setDesc("Your Twitter API Key (also called Consumer Key)").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter your API Key").setValue(this.plugin.settings.twitter.apiKey).onChange(async (value) => {
+          this.plugin.settings.twitter.apiKey = value;
+          await this.plugin.saveSettings();
+        });
+      });
+      new import_obsidian3.Setting(containerEl).setName("Twitter API Secret").setDesc("Your Twitter API Secret (also called Consumer Secret)").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter your API Secret").setValue(this.plugin.settings.twitter.apiSecret).onChange(async (value) => {
+          this.plugin.settings.twitter.apiSecret = value;
+          await this.plugin.saveSettings();
+        });
+      });
+      new import_obsidian3.Setting(containerEl).setName("Twitter Access Token").setDesc("Your Twitter Access Token").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter your Access Token").setValue(this.plugin.settings.twitter.accessToken).onChange(async (value) => {
+          this.plugin.settings.twitter.accessToken = value;
+          await this.plugin.saveSettings();
+        });
+      });
+      new import_obsidian3.Setting(containerEl).setName("Twitter Access Token Secret").setDesc("Your Twitter Access Token Secret").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter your Access Token Secret").setValue(this.plugin.settings.twitter.accessTokenSecret).onChange(async (value) => {
+          this.plugin.settings.twitter.accessTokenSecret = value;
+          await this.plugin.saveSettings();
+        });
+      });
+      new import_obsidian3.Setting(containerEl).setName("Twitter Bearer Token").setDesc("Your Twitter Bearer Token (for OAuth 2.0)").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter your Bearer Token").setValue(this.plugin.settings.twitter.bearerToken).onChange(async (value) => {
+          this.plugin.settings.twitter.bearerToken = value;
+          await this.plugin.saveSettings();
+        });
+      });
+      new import_obsidian3.Setting(containerEl).setName("Test Twitter Connection").setDesc("Test your Twitter API connection").addButton((button) => button.setButtonText("Test Connection").onClick(async () => {
+        const { twitter } = this.plugin.settings;
+        if (!twitter.apiKey || !twitter.apiSecret || !twitter.accessToken || !twitter.accessTokenSecret || !twitter.bearerToken) {
+          this.showNotice("Please configure all Twitter API credentials first", "error");
+          return;
+        }
+        button.setButtonText("Testing...");
+        button.setDisabled(true);
+        try {
+          const { TwitterClient: TwitterClient2 } = await Promise.resolve().then(() => (init_twitterClient(), twitterClient_exports));
+          const client = new TwitterClient2(twitter);
+          const isConnected = await client.testConnection();
+          if (isConnected) {
+            this.showNotice("\u2705 Twitter connection successful!", "success");
+          } else {
+            this.showNotice("\u274C Twitter connection failed. Check your credentials.", "error");
+          }
+        } catch (error) {
+          this.showNotice(`\u274C Twitter connection error: ${error.message}`, "error");
+        } finally {
+          button.setButtonText("Test Connection");
+          button.setDisabled(false);
+        }
+      }));
+      new import_obsidian3.Setting(containerEl).setName("Auto-post to Twitter/X").setDesc("Automatically post to Twitter when publishing to Microfeed").addToggle((toggle) => toggle.setValue(this.plugin.settings.twitter.autoPost).onChange(async (value) => {
+        this.plugin.settings.twitter.autoPost = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian3.Setting(containerEl).setName("Twitter Post Format").setDesc("Choose how your content appears on Twitter").addDropdown((dropdown) => dropdown.addOption("title_only", "Title only").addOption("title_with_link", "Title + Microfeed link").addOption("title_with_summary", "Title + Summary + Link").setValue(this.plugin.settings.twitter.postFormat).onChange(async (value) => {
+        this.plugin.settings.twitter.postFormat = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian3.Setting(containerEl).setName("Include Hashtags").setDesc("Include custom hashtags in Twitter posts").addToggle((toggle) => toggle.setValue(this.plugin.settings.twitter.includeHashtags).onChange(async (value) => {
+        this.plugin.settings.twitter.includeHashtags = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian3.Setting(containerEl).setName("Custom Hashtags").setDesc("Comma-separated hashtags to include (e.g., #microfeed #blog)").addText((text) => text.setPlaceholder("#microfeed, #obsidian").setValue(this.plugin.settings.twitter.customHashtags).onChange(async (value) => {
+        this.plugin.settings.twitter.customHashtags = value;
+        await this.plugin.saveSettings();
+      }));
+    }
     containerEl.createEl("h3", { text: "Help" });
     const helpDiv = containerEl.createDiv();
     helpDiv.innerHTML = `
       <p><strong>How to use:</strong></p>
       <ol>
         <li>Configure your Microfeed API URL and API Key above</li>
+        <li>Optional: Set up Twitter/X integration for automatic posting</li>
         <li>Open any markdown note in Obsidian</li>
         <li>Use the command palette (Cmd/Ctrl + P) and search for "Publish to Microfeed"</li>
         <li>The plugin will automatically parse your content and upload it</li>
@@ -1691,6 +1882,16 @@ itunes:explicit: false
 itunes:season: 1
 itunes:episode: 5
 ---</pre>
+      
+      <p><strong>Twitter/X Integration:</strong></p>
+      <p>To set up Twitter/X posting:</p>
+      <ol>
+        <li>Go to <a href="https://developer.twitter.com">developer.twitter.com</a></li>
+        <li>Create a new app and get your API credentials</li>
+        <li>Enable OAuth 1.0a and OAuth 2.0 in your app settings</li>
+        <li>Enter your credentials in the Twitter/X settings above</li>
+        <li>Test the connection before enabling auto-posting</li>
+      </ol>
     `;
   }
   showNotice(message, type) {
@@ -2624,7 +2825,7 @@ var HTMLTemplateGenerator = class {
 };
 
 // src/imageGenerator.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var ImageGenerator = class {
   constructor() {
     this.qrCodeBlob = null;
@@ -3443,7 +3644,7 @@ var ImageGenerator = class {
     try {
       console.log("\u{1F504} Preloading QR code image...");
       const qrUrl = "https://cdn.titi.li/titi-li/production/media/image-c9127e43a0a860fe555a62a8fce628ad.jpg";
-      const response = await (0, import_obsidian3.requestUrl)({
+      const response = await (0, import_obsidian4.requestUrl)({
         url: qrUrl,
         method: "GET",
         headers: {
@@ -3562,7 +3763,8 @@ var ImageGenerator = class {
 };
 
 // main.ts
-var MicrofeedPlugin = class extends import_obsidian4.Plugin {
+init_twitterClient();
+var MicrofeedPlugin = class extends import_obsidian5.Plugin {
   async onload() {
     await this.loadSettings();
     this.imageGenerator = new ImageGenerator();
@@ -3598,6 +3800,20 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
         this.testAllMagazineStyles();
       }
     });
+    this.addCommand({
+      id: "post-to-twitter",
+      name: "Post to Twitter/X",
+      callback: () => {
+        this.postToTwitter();
+      }
+    });
+    this.addCommand({
+      id: "publish-to-microfeed-and-twitter",
+      name: "Publish to Microfeed and Twitter/X",
+      callback: () => {
+        this.publishToMicrofeedAndTwitter();
+      }
+    });
     this.addSettingTab(new MicrofeedSettingTab(this.app, this));
   }
   onunload() {
@@ -3609,56 +3825,56 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
     await this.saveData(this.settings);
   }
   async publishCurrentNote() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!activeView) {
-      new import_obsidian4.Notice("No active markdown note found");
+      new import_obsidian5.Notice("No active markdown note found");
       return;
     }
     const file = activeView.file;
     if (!file) {
-      new import_obsidian4.Notice("No file found");
+      new import_obsidian5.Notice("No file found");
       return;
     }
     await this.publishNote(file);
   }
   async publishWithOptions() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!activeView) {
-      new import_obsidian4.Notice("No active markdown note found");
+      new import_obsidian5.Notice("No active markdown note found");
       return;
     }
     const file = activeView.file;
     if (!file) {
-      new import_obsidian4.Notice("No file found");
+      new import_obsidian5.Notice("No file found");
       return;
     }
     new PublishOptionsModal(this.app, this, file).open();
   }
   async generateMagazinePreview() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!activeView) {
-      new import_obsidian4.Notice("No active markdown note found");
+      new import_obsidian5.Notice("No active markdown note found");
       return;
     }
     const file = activeView.file;
     if (!file) {
-      new import_obsidian4.Notice("No file found");
+      new import_obsidian5.Notice("No file found");
       return;
     }
     new MagazineStyleModal(this.app, this, file).open();
   }
   async testAllMagazineStyles() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!activeView) {
-      new import_obsidian4.Notice("No active markdown note found");
+      new import_obsidian5.Notice("No active markdown note found");
       return;
     }
     const file = activeView.file;
     if (!file) {
-      new import_obsidian4.Notice("No file found");
+      new import_obsidian5.Notice("No file found");
       return;
     }
-    const notice = new import_obsidian4.Notice("\u6B63\u5728\u751F\u6210\u6240\u6709\u98CE\u683C\u7684\u9884\u89C8\u56FE\u7247...", 0);
+    const notice = new import_obsidian5.Notice("\u6B63\u5728\u751F\u6210\u6240\u6709\u98CE\u683C\u7684\u9884\u89C8\u56FE\u7247...", 0);
     try {
       const content = await this.app.vault.read(file);
       const parsedContent = ContentParser.parseMarkdownContent(content, file.name);
@@ -3684,11 +3900,11 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
       }
       notice.hide();
       const successCount = results.filter((r) => r.success).length;
-      new import_obsidian4.Notice(`\u5B8C\u6210\uFF01\u6210\u529F\u751F\u6210 ${successCount}/${results.length} \u79CD\u98CE\u683C\u7684\u56FE\u7247`);
+      new import_obsidian5.Notice(`\u5B8C\u6210\uFF01\u6210\u529F\u751F\u6210 ${successCount}/${results.length} \u79CD\u98CE\u683C\u7684\u56FE\u7247`);
       console.log("Magazine style generation results:", results);
     } catch (error) {
       notice.hide();
-      new import_obsidian4.Notice(`\u6D4B\u8BD5\u5931\u8D25: ${error.message}`);
+      new import_obsidian5.Notice(`\u6D4B\u8BD5\u5931\u8D25: ${error.message}`);
       console.error("Test all styles error:", error);
     }
   }
@@ -3701,24 +3917,49 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
       styleId
     );
   }
-  async publishNote(file, customOptions) {
+  async publishNote(file, customOptions, postToTwitter) {
     if (!this.settings.apiUrl || !this.settings.apiKey) {
-      new import_obsidian4.Notice("Please configure API URL and API Key in settings");
+      new import_obsidian5.Notice("Please configure API URL and API Key in settings");
       return;
     }
-    const publishNotice = new import_obsidian4.Notice("Publishing to Microfeed...", 0);
+    const publishNotice = new import_obsidian5.Notice("Publishing to Microfeed...", 0);
     try {
       const content = await this.app.vault.read(file);
       const parsedContent = ContentParser.parseMarkdownContent(content, file.name);
       const client = new MicrofeedClient(this.settings.apiUrl, this.settings.apiKey);
       const item = await this.buildMicrofeedItem(parsedContent, client, file, customOptions);
       const result = await client.createItem(item);
+      const itemUrl = `${this.settings.apiUrl}/items/${result.id}`;
+      let twitterResult = null;
+      const shouldPostToTwitter = postToTwitter != null ? postToTwitter : this.settings.twitter.enabled && this.settings.twitter.autoPost;
+      if (shouldPostToTwitter) {
+        try {
+          const twitterClient = new TwitterClient(this.settings.twitter);
+          if (twitterClient.isConfigured()) {
+            const tweetText = twitterClient.formatTweetText(
+              item.title,
+              itemUrl,
+              parsedContent.content.substring(0, 200)
+            );
+            twitterResult = await twitterClient.postTweet(tweetText);
+            new import_obsidian5.Notice("\u{1F4F1} Posted to Twitter/X!");
+          } else {
+            new import_obsidian5.Notice("\u26A0\uFE0F Twitter credentials not configured correctly");
+          }
+        } catch (twitterError) {
+          console.error("Twitter posting error:", twitterError);
+          new import_obsidian5.Notice(`\u26A0\uFE0F Posted to Microfeed but failed to post to Twitter: ${twitterError.message}`);
+        }
+      }
       publishNotice.hide();
-      new import_obsidian4.Notice("\u2705 Successfully published to Microfeed!");
+      new import_obsidian5.Notice("\u2705 Successfully published to Microfeed!");
       console.log("Published item:", result);
+      if (twitterResult) {
+        console.log("Twitter post:", twitterResult);
+      }
     } catch (error) {
       publishNotice.hide();
-      new import_obsidian4.Notice(`\u274C Failed to publish: ${error.message}`);
+      new import_obsidian5.Notice(`\u274C Failed to publish: ${error.message}`);
       console.error("Publish error:", error);
     }
   }
@@ -3917,19 +4158,69 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
       return null;
     }
     const file = this.app.vault.getAbstractFileByPath(path);
-    return file instanceof import_obsidian4.TFile ? file : null;
+    return file instanceof import_obsidian5.TFile ? file : null;
   }
   markdownToHtml(markdown) {
     return markdown.replace(/^### (.*$)/gim, "<h3>$1</h3>").replace(/^## (.*$)/gim, "<h2>$1</h2>").replace(/^# (.*$)/gim, "<h1>$1</h1>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/`(.*?)`/g, "<code>$1</code>").replace(/\n\n/g, "</p><p>").replace(/^(.+)$/gm, "<p>$1</p>").replace(/<p><h([1-6])>/g, "<h$1>").replace(/<\/h([1-6])><\/p>/g, "</h$1>");
   }
+  async postToTwitter() {
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    if (!activeView) {
+      new import_obsidian5.Notice("No active markdown note found");
+      return;
+    }
+    const file = activeView.file;
+    if (!file) {
+      new import_obsidian5.Notice("No file found");
+      return;
+    }
+    if (!this.settings.twitter.enabled || !this.settings.twitter.bearerToken) {
+      new import_obsidian5.Notice("Twitter/X integration is not configured. Please check your settings.");
+      return;
+    }
+    const notice = new import_obsidian5.Notice("Posting to Twitter/X...", 0);
+    try {
+      const content = await this.app.vault.read(file);
+      const parsedContent = ContentParser.parseMarkdownContent(content, file.name);
+      const twitterClient = new TwitterClient(this.settings.twitter);
+      const tweetText = twitterClient.formatTweetText(
+        parsedContent.title,
+        "",
+        // No Microfeed URL for Twitter-only posts
+        parsedContent.content.substring(0, 200)
+      );
+      await twitterClient.postTweet(tweetText);
+      notice.hide();
+      new import_obsidian5.Notice("\u{1F4F1} Successfully posted to Twitter/X!");
+    } catch (error) {
+      notice.hide();
+      new import_obsidian5.Notice(`\u274C Failed to post to Twitter: ${error.message}`);
+      console.error("Twitter posting error:", error);
+    }
+  }
+  async publishToMicrofeedAndTwitter() {
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    if (!activeView) {
+      new import_obsidian5.Notice("No active markdown note found");
+      return;
+    }
+    const file = activeView.file;
+    if (!file) {
+      new import_obsidian5.Notice("No file found");
+      return;
+    }
+    await this.publishNote(file, void 0, true);
+  }
 };
-var PublishOptionsModal = class extends import_obsidian4.Modal {
+var PublishOptionsModal = class extends import_obsidian5.Modal {
   constructor(app, plugin, file) {
     super(app);
     this.status = "published";
+    this.postToTwitter = false;
     this.plugin = plugin;
     this.file = file;
     this.status = plugin.settings.defaultStatus;
+    this.postToTwitter = plugin.settings.twitter.enabled && plugin.settings.twitter.autoPost;
   }
   onOpen() {
     const { contentEl } = this;
@@ -3950,6 +4241,18 @@ var PublishOptionsModal = class extends import_obsidian4.Modal {
     statusSelect.addEventListener("change", (e) => {
       this.status = e.target.value;
     });
+    if (this.plugin.settings.twitter.enabled) {
+      const twitterContainer = contentEl.createDiv();
+      twitterContainer.createEl("label", { text: "Post to Twitter/X:" });
+      const twitterToggle = twitterContainer.createEl("input", {
+        type: "checkbox",
+        cls: "checkbox"
+      });
+      twitterToggle.checked = this.postToTwitter;
+      twitterToggle.addEventListener("change", (e) => {
+        this.postToTwitter = e.target.checked;
+      });
+    }
     const buttonContainer = contentEl.createDiv({ cls: "modal-button-container" });
     const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
     cancelButton.addEventListener("click", () => this.close());
@@ -3959,7 +4262,7 @@ var PublishOptionsModal = class extends import_obsidian4.Modal {
     });
     publishButton.addEventListener("click", async () => {
       this.close();
-      await this.plugin.publishNote(this.file, { status: this.status });
+      await this.plugin.publishNote(this.file, { status: this.status }, this.postToTwitter);
     });
   }
   onClose() {
@@ -3967,7 +4270,7 @@ var PublishOptionsModal = class extends import_obsidian4.Modal {
     contentEl.empty();
   }
 };
-var MagazineStyleModal = class extends import_obsidian4.Modal {
+var MagazineStyleModal = class extends import_obsidian5.Modal {
   constructor(app, plugin, file) {
     super(app);
     this.selectedStyleId = "";

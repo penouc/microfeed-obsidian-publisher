@@ -8,6 +8,18 @@ export interface MicrofeedSettings {
   defaultStatus: 'published' | 'unpublished' | 'unlisted';
   autoGenerateImage: boolean;
   imageTemplate: 'simple' | 'detailed';
+  twitter: {
+    apiKey: string;
+    apiSecret: string;
+    accessToken: string;
+    accessTokenSecret: string;
+    bearerToken: string;
+    enabled: boolean;
+    autoPost: boolean;
+    postFormat: 'title_only' | 'title_with_link' | 'title_with_summary';
+    includeHashtags: boolean;
+    customHashtags: string;
+  };
 }
 
 export const DEFAULT_SETTINGS: MicrofeedSettings = {
@@ -15,7 +27,19 @@ export const DEFAULT_SETTINGS: MicrofeedSettings = {
   apiKey: '',
   defaultStatus: 'published',
   autoGenerateImage: true,
-  imageTemplate: 'detailed'
+  imageTemplate: 'detailed',
+  twitter: {
+    apiKey: '',
+    apiSecret: '',
+    accessToken: '',
+    accessTokenSecret: '',
+    bearerToken: '',
+    enabled: false,
+    autoPost: false,
+    postFormat: 'title_with_link',
+    includeHashtags: false,
+    customHashtags: '#microfeed'
+  }
 };
 
 export class MicrofeedSettingTab extends PluginSettingTab {
@@ -134,6 +158,180 @@ export class MicrofeedSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // Twitter/X Integration Settings
+    containerEl.createEl('h3', { text: 'Twitter/X Integration' });
+
+    // Enable Twitter Integration
+    new Setting(containerEl)
+      .setName('Enable Twitter/X Integration')
+      .setDesc('Allow posting to Twitter/X when publishing content')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.twitter.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.twitter.enabled = value;
+          await this.plugin.saveSettings();
+          this.display(); // Refresh the settings UI
+        }));
+
+    if (this.plugin.settings.twitter.enabled) {
+      // API Key
+      new Setting(containerEl)
+        .setName('Twitter API Key')
+        .setDesc('Your Twitter API Key (also called Consumer Key)')
+        .addText(text => {
+          text.inputEl.type = 'password';
+          text
+            .setPlaceholder('Enter your API Key')
+            .setValue(this.plugin.settings.twitter.apiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.twitter.apiKey = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // API Secret
+      new Setting(containerEl)
+        .setName('Twitter API Secret')
+        .setDesc('Your Twitter API Secret (also called Consumer Secret)')
+        .addText(text => {
+          text.inputEl.type = 'password';
+          text
+            .setPlaceholder('Enter your API Secret')
+            .setValue(this.plugin.settings.twitter.apiSecret)
+            .onChange(async (value) => {
+              this.plugin.settings.twitter.apiSecret = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // Access Token
+      new Setting(containerEl)
+        .setName('Twitter Access Token')
+        .setDesc('Your Twitter Access Token')
+        .addText(text => {
+          text.inputEl.type = 'password';
+          text
+            .setPlaceholder('Enter your Access Token')
+            .setValue(this.plugin.settings.twitter.accessToken)
+            .onChange(async (value) => {
+              this.plugin.settings.twitter.accessToken = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // Access Token Secret
+      new Setting(containerEl)
+        .setName('Twitter Access Token Secret')
+        .setDesc('Your Twitter Access Token Secret')
+        .addText(text => {
+          text.inputEl.type = 'password';
+          text
+            .setPlaceholder('Enter your Access Token Secret')
+            .setValue(this.plugin.settings.twitter.accessTokenSecret)
+            .onChange(async (value) => {
+              this.plugin.settings.twitter.accessTokenSecret = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // Bearer Token
+      new Setting(containerEl)
+        .setName('Twitter Bearer Token')
+        .setDesc('Your Twitter Bearer Token (for OAuth 2.0)')
+        .addText(text => {
+          text.inputEl.type = 'password';
+          text
+            .setPlaceholder('Enter your Bearer Token')
+            .setValue(this.plugin.settings.twitter.bearerToken)
+            .onChange(async (value) => {
+              this.plugin.settings.twitter.bearerToken = value;
+              await this.plugin.saveSettings();
+            });
+        });
+
+      // Test Twitter Connection Button
+      new Setting(containerEl)
+        .setName('Test Twitter Connection')
+        .setDesc('Test your Twitter API connection')
+        .addButton(button => button
+          .setButtonText('Test Connection')
+          .onClick(async () => {
+            const { twitter } = this.plugin.settings;
+            if (!twitter.apiKey || !twitter.apiSecret || !twitter.accessToken || !twitter.accessTokenSecret || !twitter.bearerToken) {
+              this.showNotice('Please configure all Twitter API credentials first', 'error');
+              return;
+            }
+
+            button.setButtonText('Testing...');
+            button.setDisabled(true);
+
+            try {
+              const { TwitterClient } = await import('./twitterClient');
+              const client = new TwitterClient(twitter);
+              const isConnected = await client.testConnection();
+              
+              if (isConnected) {
+                this.showNotice('✅ Twitter connection successful!', 'success');
+              } else {
+                this.showNotice('❌ Twitter connection failed. Check your credentials.', 'error');
+              }
+            } catch (error) {
+              this.showNotice(`❌ Twitter connection error: ${error.message}`, 'error');
+            } finally {
+              button.setButtonText('Test Connection');
+              button.setDisabled(false);
+            }
+          }));
+
+      // Auto-post to Twitter
+      new Setting(containerEl)
+        .setName('Auto-post to Twitter/X')
+        .setDesc('Automatically post to Twitter when publishing to Microfeed')
+        .addToggle(toggle => toggle
+          .setValue(this.plugin.settings.twitter.autoPost)
+          .onChange(async (value) => {
+            this.plugin.settings.twitter.autoPost = value;
+            await this.plugin.saveSettings();
+          }));
+
+      // Post Format
+      new Setting(containerEl)
+        .setName('Twitter Post Format')
+        .setDesc('Choose how your content appears on Twitter')
+        .addDropdown(dropdown => dropdown
+          .addOption('title_only', 'Title only')
+          .addOption('title_with_link', 'Title + Microfeed link')
+          .addOption('title_with_summary', 'Title + Summary + Link')
+          .setValue(this.plugin.settings.twitter.postFormat)
+          .onChange(async (value: 'title_only' | 'title_with_link' | 'title_with_summary') => {
+            this.plugin.settings.twitter.postFormat = value;
+            await this.plugin.saveSettings();
+          }));
+
+      // Include Hashtags
+      new Setting(containerEl)
+        .setName('Include Hashtags')
+        .setDesc('Include custom hashtags in Twitter posts')
+        .addToggle(toggle => toggle
+          .setValue(this.plugin.settings.twitter.includeHashtags)
+          .onChange(async (value) => {
+            this.plugin.settings.twitter.includeHashtags = value;
+            await this.plugin.saveSettings();
+          }));
+
+      // Custom Hashtags
+      new Setting(containerEl)
+        .setName('Custom Hashtags')
+        .setDesc('Comma-separated hashtags to include (e.g., #microfeed #blog)')
+        .addText(text => text
+          .setPlaceholder('#microfeed, #obsidian')
+          .setValue(this.plugin.settings.twitter.customHashtags)
+          .onChange(async (value) => {
+            this.plugin.settings.twitter.customHashtags = value;
+            await this.plugin.saveSettings();
+          }));
+    }
+
     // Help Section
     containerEl.createEl('h3', { text: 'Help' });
     
@@ -142,6 +340,7 @@ export class MicrofeedSettingTab extends PluginSettingTab {
       <p><strong>How to use:</strong></p>
       <ol>
         <li>Configure your Microfeed API URL and API Key above</li>
+        <li>Optional: Set up Twitter/X integration for automatic posting</li>
         <li>Open any markdown note in Obsidian</li>
         <li>Use the command palette (Cmd/Ctrl + P) and search for "Publish to Microfeed"</li>
         <li>The plugin will automatically parse your content and upload it</li>
@@ -165,6 +364,16 @@ itunes:explicit: false
 itunes:season: 1
 itunes:episode: 5
 ---</pre>
+      
+      <p><strong>Twitter/X Integration:</strong></p>
+      <p>To set up Twitter/X posting:</p>
+      <ol>
+        <li>Go to <a href="https://developer.twitter.com">developer.twitter.com</a></li>
+        <li>Create a new app and get your API credentials</li>
+        <li>Enable OAuth 1.0a and OAuth 2.0 in your app settings</li>
+        <li>Enter your credentials in the Twitter/X settings above</li>
+        <li>Test the connection before enabling auto-posting</li>
+      </ol>
     `;
   }
 
