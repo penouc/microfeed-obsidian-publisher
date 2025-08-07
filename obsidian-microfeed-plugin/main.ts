@@ -307,28 +307,41 @@ export default class MicrofeedPlugin extends Plugin {
     const mediaFile_obj = await this.getFileFromPath(mediaPath);
     
     if (mediaFile_obj) {
-      const fileName = mediaFile_obj.name;
-      const mediaUrl = await client.uploadMediaFile(
-        await this.app.vault.readBinary(mediaFile_obj) as any, 
-        mediaFile.type, 
-        fileName
-      );
-      
-      item.attachment = {
-        category: mediaFile.type,
-        url: mediaUrl,
-        mime_type: client.getMimeType(fileName, mediaFile.type),
-        size_in_bytes: (await this.app.vault.readBinary(mediaFile_obj)).byteLength,
-      };
+      try {
+        const fileName = mediaFile_obj.name;
+        const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+        console.log(`📤 Uploading main attachment: ${fileName} (${binaryData.byteLength} bytes, type: ${mediaFile.type})`);
+        
+        const mediaUrl = await client.uploadMediaFile(
+          binaryData as any, 
+          mediaFile.type, 
+          fileName
+        );
+        
+        item.attachment = {
+          category: mediaFile.type,
+          url: mediaUrl,
+          mime_type: client.getMimeType(fileName, mediaFile.type),
+          size_in_bytes: binaryData.byteLength,
+        };
 
-      // Add duration for audio/video
-      if (mediaFile.type === 'audio' || mediaFile.type === 'video') {
-        const blob = new Blob([await this.app.vault.readBinary(mediaFile_obj)]);
-        const duration = await client.getMediaDuration(new File([blob], fileName));
-        if (duration) {
-          item.attachment.duration_in_seconds = duration;
+        // Add duration for audio/video
+        if (mediaFile.type === 'audio' || mediaFile.type === 'video') {
+          const blob = new Blob([binaryData]);
+          const duration = await client.getMediaDuration(new File([blob], fileName));
+          if (duration) {
+            item.attachment.duration_in_seconds = duration;
+          }
         }
+        
+        console.log(`✅ Successfully uploaded main attachment: ${mediaUrl}`);
+      } catch (error) {
+        console.error(`❌ Failed to upload main attachment ${mediaFile.url}:`, error);
+        console.error('📋 Error details:', error.message);
       }
+    } else {
+      console.warn(`⚠️ Could not find main attachment file: ${mediaFile.url}`);
+      console.warn(`📂 Resolved path was: ${mediaPath}`);
     }
   }
 
@@ -355,10 +368,13 @@ export default class MicrofeedPlugin extends Plugin {
         
         if (mediaFile_obj) {
           try {
-            console.log('📤 Uploading document image to R2...');
+            console.log(`📤 Uploading document image to R2: ${mediaFile_obj.name}...`);
             const fileName = mediaFile_obj.name;
+            const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+            console.log(`📄 Image file size: ${binaryData.byteLength} bytes`);
+            
             const mediaUrl = await client.uploadMediaFile(
-              await this.app.vault.readBinary(mediaFile_obj) as any,
+              binaryData as any,
               'image',
               fileName
             );
@@ -366,8 +382,12 @@ export default class MicrofeedPlugin extends Plugin {
             item.image = mediaUrl;
             console.log('✅ Successfully uploaded document image:', mediaUrl);
           } catch (error) {
-            console.warn('⚠️ Failed to upload document image:', error);
+            console.error('❌ Failed to upload document image:', error);
+            console.error('📋 Error details:', error.message);
           }
+        } else {
+          console.warn(`⚠️ Could not find image file for: ${firstImage.url}`);
+          console.warn(`📂 Resolved path was: ${mediaPath}`);
         }
       }
     }
@@ -402,8 +422,11 @@ export default class MicrofeedPlugin extends Plugin {
       if (mediaFile_obj) {
         try {
           const fileName = mediaFile_obj.name;
+          const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+          console.log(`📤 Uploading content image: ${fileName} (${binaryData.byteLength} bytes)`);
+          
           const mediaUrl = await client.uploadMediaFile(
-            await this.app.vault.readBinary(mediaFile_obj) as any,
+            binaryData as any,
             'image',
             fileName
           );
@@ -416,8 +439,12 @@ export default class MicrofeedPlugin extends Plugin {
           
           console.log(`✅ Replaced image ${imageFile.url} with ${mediaUrl}`);
         } catch (error) {
-          console.warn(`⚠️ Failed to upload content image ${imageFile.url}:`, error);
+          console.error(`❌ Failed to upload content image ${imageFile.url}:`, error);
+          console.error('📋 Error details:', error.message);
         }
+      } else {
+        console.warn(`⚠️ Could not find content image file: ${imageFile.url}`);
+        console.warn(`📂 Resolved path was: ${mediaPath}`);
       }
     }
 
@@ -483,18 +510,24 @@ export default class MicrofeedPlugin extends Plugin {
     // Resolve relative path
     const currentDir = currentFile.parent?.path || '';
     if (mediaUrl.startsWith('./')) {
-      return `${currentDir}/${mediaUrl.slice(2)}`;
+      // Handle vault root case properly
+      const resolvedPath = currentDir ? `${currentDir}/${mediaUrl.slice(2)}` : mediaUrl.slice(2);
+      console.log(`🔍 Resolving relative path: ${mediaUrl} -> ${resolvedPath} (currentDir: ${currentDir})`);
+      return resolvedPath;
     } else if (mediaUrl.startsWith('../')) {
       // Handle relative paths
-      const parts = currentDir.split('/');
-      const urlParts = mediaUrl.split('/');
+      const parts = currentDir.split('/').filter(p => p); // Remove empty parts
+      const urlParts = mediaUrl.split('/').filter(p => p);
       let i = 0;
       while (urlParts[i] === '..' && i < urlParts.length) {
-        parts.pop();
+        if (parts.length > 0) parts.pop();
         i++;
       }
-      return `${parts.join('/')}/${urlParts.slice(i).join('/')}`;
+      const resolvedPath = `${parts.join('/')}/${urlParts.slice(i).join('/')}`;
+      console.log(`🔍 Resolving relative path: ${mediaUrl} -> ${resolvedPath} (currentDir: ${currentDir})`);
+      return resolvedPath;
     } else {
+      console.log(`🔍 Using vault-relative path: ${mediaUrl}`);
       return mediaUrl; // Assume it's a vault-relative path
     }
   }
@@ -504,8 +537,30 @@ export default class MicrofeedPlugin extends Plugin {
       return null; // External URLs can't be read as files
     }
     
+    console.log(`🔍 Looking for file at path: ${path}`);
     const file = this.app.vault.getAbstractFileByPath(path);
-    return file instanceof TFile ? file : null;
+    
+    if (!file) {
+      console.warn(`⚠️ File not found at path: ${path}`);
+      // List available files in the directory for debugging
+      const pathParts = path.split('/');
+      if (pathParts.length > 1) {
+        const dirPath = pathParts.slice(0, -1).join('/');
+        const folder = this.app.vault.getAbstractFileByPath(dirPath);
+        if (folder && 'children' in folder) {
+          console.log(`📁 Available files in ${dirPath}:`, (folder as any).children.map((f: any) => f.name));
+        }
+      }
+      return null;
+    }
+    
+    if (!(file instanceof TFile)) {
+      console.warn(`⚠️ Path points to folder, not file: ${path}`);
+      return null;
+    }
+    
+    console.log(`✅ Found file: ${file.name} (size: ${file.stat.size} bytes)`);
+    return file;
   }
 
   private markdownToHtml(markdown: string): string {

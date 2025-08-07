@@ -3774,25 +3774,36 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
     const mediaPath = this.resolveMediaPath(mediaFile.url, file);
     const mediaFile_obj = await this.getFileFromPath(mediaPath);
     if (mediaFile_obj) {
-      const fileName = mediaFile_obj.name;
-      const mediaUrl = await client.uploadMediaFile(
-        await this.app.vault.readBinary(mediaFile_obj),
-        mediaFile.type,
-        fileName
-      );
-      item.attachment = {
-        category: mediaFile.type,
-        url: mediaUrl,
-        mime_type: client.getMimeType(fileName, mediaFile.type),
-        size_in_bytes: (await this.app.vault.readBinary(mediaFile_obj)).byteLength
-      };
-      if (mediaFile.type === "audio" || mediaFile.type === "video") {
-        const blob = new Blob([await this.app.vault.readBinary(mediaFile_obj)]);
-        const duration = await client.getMediaDuration(new File([blob], fileName));
-        if (duration) {
-          item.attachment.duration_in_seconds = duration;
+      try {
+        const fileName = mediaFile_obj.name;
+        const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+        console.log(`\u{1F4E4} Uploading main attachment: ${fileName} (${binaryData.byteLength} bytes, type: ${mediaFile.type})`);
+        const mediaUrl = await client.uploadMediaFile(
+          binaryData,
+          mediaFile.type,
+          fileName
+        );
+        item.attachment = {
+          category: mediaFile.type,
+          url: mediaUrl,
+          mime_type: client.getMimeType(fileName, mediaFile.type),
+          size_in_bytes: binaryData.byteLength
+        };
+        if (mediaFile.type === "audio" || mediaFile.type === "video") {
+          const blob = new Blob([binaryData]);
+          const duration = await client.getMediaDuration(new File([blob], fileName));
+          if (duration) {
+            item.attachment.duration_in_seconds = duration;
+          }
         }
+        console.log(`\u2705 Successfully uploaded main attachment: ${mediaUrl}`);
+      } catch (error) {
+        console.error(`\u274C Failed to upload main attachment ${mediaFile.url}:`, error);
+        console.error("\u{1F4CB} Error details:", error.message);
       }
+    } else {
+      console.warn(`\u26A0\uFE0F Could not find main attachment file: ${mediaFile.url}`);
+      console.warn(`\u{1F4C2} Resolved path was: ${mediaPath}`);
     }
   }
   async processDocumentImages(item, parsedContent, client, file) {
@@ -3807,18 +3818,24 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
         const mediaFile_obj = await this.getFileFromPath(mediaPath);
         if (mediaFile_obj) {
           try {
-            console.log("\u{1F4E4} Uploading document image to R2...");
+            console.log(`\u{1F4E4} Uploading document image to R2: ${mediaFile_obj.name}...`);
             const fileName = mediaFile_obj.name;
+            const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+            console.log(`\u{1F4C4} Image file size: ${binaryData.byteLength} bytes`);
             const mediaUrl = await client.uploadMediaFile(
-              await this.app.vault.readBinary(mediaFile_obj),
+              binaryData,
               "image",
               fileName
             );
             item.image = mediaUrl;
             console.log("\u2705 Successfully uploaded document image:", mediaUrl);
           } catch (error) {
-            console.warn("\u26A0\uFE0F Failed to upload document image:", error);
+            console.error("\u274C Failed to upload document image:", error);
+            console.error("\u{1F4CB} Error details:", error.message);
           }
+        } else {
+          console.warn(`\u26A0\uFE0F Could not find image file for: ${firstImage.url}`);
+          console.warn(`\u{1F4C2} Resolved path was: ${mediaPath}`);
         }
       }
     }
@@ -3839,8 +3856,10 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
       if (mediaFile_obj) {
         try {
           const fileName = mediaFile_obj.name;
+          const binaryData = await this.app.vault.readBinary(mediaFile_obj);
+          console.log(`\u{1F4E4} Uploading content image: ${fileName} (${binaryData.byteLength} bytes)`);
           const mediaUrl = await client.uploadMediaFile(
-            await this.app.vault.readBinary(mediaFile_obj),
+            binaryData,
             "image",
             fileName
           );
@@ -3850,8 +3869,12 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
           );
           console.log(`\u2705 Replaced image ${imageFile.url} with ${mediaUrl}`);
         } catch (error) {
-          console.warn(`\u26A0\uFE0F Failed to upload content image ${imageFile.url}:`, error);
+          console.error(`\u274C Failed to upload content image ${imageFile.url}:`, error);
+          console.error("\u{1F4CB} Error details:", error.message);
         }
+      } else {
+        console.warn(`\u26A0\uFE0F Could not find content image file: ${imageFile.url}`);
+        console.warn(`\u{1F4C2} Resolved path was: ${mediaPath}`);
       }
     }
     item.content_html = updatedContent;
@@ -3898,17 +3921,23 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
     }
     const currentDir = ((_a = currentFile.parent) == null ? void 0 : _a.path) || "";
     if (mediaUrl.startsWith("./")) {
-      return `${currentDir}/${mediaUrl.slice(2)}`;
+      const resolvedPath = currentDir ? `${currentDir}/${mediaUrl.slice(2)}` : mediaUrl.slice(2);
+      console.log(`\u{1F50D} Resolving relative path: ${mediaUrl} -> ${resolvedPath} (currentDir: ${currentDir})`);
+      return resolvedPath;
     } else if (mediaUrl.startsWith("../")) {
-      const parts = currentDir.split("/");
-      const urlParts = mediaUrl.split("/");
+      const parts = currentDir.split("/").filter((p) => p);
+      const urlParts = mediaUrl.split("/").filter((p) => p);
       let i = 0;
       while (urlParts[i] === ".." && i < urlParts.length) {
-        parts.pop();
+        if (parts.length > 0)
+          parts.pop();
         i++;
       }
-      return `${parts.join("/")}/${urlParts.slice(i).join("/")}`;
+      const resolvedPath = `${parts.join("/")}/${urlParts.slice(i).join("/")}`;
+      console.log(`\u{1F50D} Resolving relative path: ${mediaUrl} -> ${resolvedPath} (currentDir: ${currentDir})`);
+      return resolvedPath;
     } else {
+      console.log(`\u{1F50D} Using vault-relative path: ${mediaUrl}`);
       return mediaUrl;
     }
   }
@@ -3916,8 +3945,26 @@ var MicrofeedPlugin = class extends import_obsidian4.Plugin {
     if (path.startsWith("http")) {
       return null;
     }
+    console.log(`\u{1F50D} Looking for file at path: ${path}`);
     const file = this.app.vault.getAbstractFileByPath(path);
-    return file instanceof import_obsidian4.TFile ? file : null;
+    if (!file) {
+      console.warn(`\u26A0\uFE0F File not found at path: ${path}`);
+      const pathParts = path.split("/");
+      if (pathParts.length > 1) {
+        const dirPath = pathParts.slice(0, -1).join("/");
+        const folder = this.app.vault.getAbstractFileByPath(dirPath);
+        if (folder && "children" in folder) {
+          console.log(`\u{1F4C1} Available files in ${dirPath}:`, folder.children.map((f) => f.name));
+        }
+      }
+      return null;
+    }
+    if (!(file instanceof import_obsidian4.TFile)) {
+      console.warn(`\u26A0\uFE0F Path points to folder, not file: ${path}`);
+      return null;
+    }
+    console.log(`\u2705 Found file: ${file.name} (size: ${file.stat.size} bytes)`);
+    return file;
   }
   markdownToHtml(markdown) {
     return markdown.replace(/^### (.*$)/gim, "<h3>$1</h3>").replace(/^## (.*$)/gim, "<h2>$1</h2>").replace(/^# (.*$)/gim, "<h1>$1</h1>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/`(.*?)`/g, "<code>$1</code>").replace(/\n\n/g, "</p><p>").replace(/^(.+)$/gm, "<p>$1</p>").replace(/<p><h([1-6])>/g, "<h$1>").replace(/<\/h([1-6])><\/p>/g, "</h$1>");
