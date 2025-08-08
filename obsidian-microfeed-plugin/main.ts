@@ -237,16 +237,30 @@ export default class MicrofeedPlugin extends Plugin {
     file: TFile,
     customOptions?: Partial<MicrofeedItem>
   ): Promise<MicrofeedItem> {
+    console.log(`🏗️ Building Microfeed item for: "${parsedContent.title}"`);
+    console.log(`📄 Found ${parsedContent.mediaFiles.length} media files in content`);
+    
+    // Process local images in content first, before building the item
+    console.log(`🖼️ Starting to process local images in content...`);
+    const processedContent = await ContentParser.processLocalImages(
+      parsedContent.content,
+      this.app.vault,
+      client,
+      file.path
+    );
+    console.log(`✨ Finished processing local images`);
+    
     const item: MicrofeedItem = {
       title: parsedContent.title,
       status: customOptions?.status || parsedContent.frontMatter.status || this.settings.defaultStatus,
-      content_html: this.markdownToHtml(parsedContent.content),
+      content_html: this.markdownToHtml(processedContent),
       date_published_ms: Date.now(),
     };
 
     // Handle main attachment and images
     const mainAttachment = ContentParser.selectMainAttachment(parsedContent.mediaFiles);
     if (mainAttachment) {
+      console.log(`🎯 Processing main attachment: ${mainAttachment.url} (${mainAttachment.type})`);
       await this.processMainAttachment(item, mainAttachment, client, file);
       
       // If the main attachment is an image, also set it as the item's image
@@ -354,6 +368,11 @@ export default class MicrofeedPlugin extends Plugin {
     // Find the first image in the document that could be used as the main image
     const imageFiles = parsedContent.mediaFiles.filter(f => f.type === 'image');
     
+    console.log(`📸 Found ${imageFiles.length} total images in document`);
+    imageFiles.forEach((img, i) => {
+      console.log(`  📷 Image ${i + 1}: ${img.url} (type: ${img.type})`);
+    });
+    
     if (imageFiles.length > 0 && !item.image) {
       const firstImage = imageFiles[0];
       
@@ -432,10 +451,12 @@ export default class MicrofeedPlugin extends Plugin {
           );
           
           // Replace the local image path with the uploaded URL in content
-          updatedContent = updatedContent.replace(
-            new RegExp(this.escapeRegExp(imageFile.url), 'g'),
-            mediaUrl
-          );
+          // Need to replace both in src attributes and potential markdown references
+          const escapedUrl = this.escapeRegExp(imageFile.url);
+          updatedContent = updatedContent
+            .replace(new RegExp(`src="${escapedUrl}"`, 'g'), `src="${mediaUrl}"`)
+            .replace(new RegExp(`src='${escapedUrl}'`, 'g'), `src='${mediaUrl}'`)
+            .replace(new RegExp(escapedUrl, 'g'), mediaUrl);
           
           console.log(`✅ Replaced image ${imageFile.url} with ${mediaUrl}`);
         } catch (error) {
@@ -565,7 +586,7 @@ export default class MicrofeedPlugin extends Plugin {
 
   private markdownToHtml(markdown: string): string {
     // Simple markdown to HTML conversion
-    // In a real implementation, you might want to use a library like marked
+    // Note: Image URLs will be replaced later in processContentImages
     return markdown
       .replace(/^### (.*$)/gim, '<h3>$1</h3>')
       .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -573,10 +594,16 @@ export default class MicrofeedPlugin extends Plugin {
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`(.*?)`/g, '<code>$1</code>')
+      // Convert markdown images to HTML: ![alt](url) -> <img src="url" alt="alt">
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+      // Convert markdown links to HTML: [text](url) -> <a href="url">text</a>
+      .replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
       .replace(/\n\n/g, '</p><p>')
       .replace(/^(.+)$/gm, '<p>$1</p>')
       .replace(/<p><h([1-6])>/g, '<h$1>')
-      .replace(/<\/h([1-6])><\/p>/g, '</h$1>');
+      .replace(/<\/h([1-6])><\/p>/g, '</h$1>')
+      .replace(/<p><img/g, '<img')
+      .replace(/><\/p>/g, '>');
   }
 }
 
@@ -656,31 +683,14 @@ class MagazineStyleModal extends Modal {
     contentEl.empty();
     contentEl.addClass('magazine-style-modal');
 
-    contentEl.createEl('h2', { text: '杂志风格预览器' });
-    contentEl.createEl('p', { text: '选择一种设计风格来预览您的内容' });
+    contentEl.createEl('h2', { text: '液态数字形态预览器' });
+    contentEl.createEl('p', { text: '使用固定的液态数字形态设计生成预览图片' });
 
-    // Style selector
-    const selectorContainer = contentEl.createDiv({ cls: 'style-selector-container' });
-    selectorContainer.createEl('label', { text: '选择设计风格:' });
-    
-    const styleSelect = selectorContainer.createEl('select', { cls: 'style-select' });
-    const randomOption = styleSelect.createEl('option', { 
-      text: '🎲 随机风格',
-      value: 'random' 
-    });
-    randomOption.selected = true;
-    
-    // Add all available styles
-    const styles = this.plugin.imageGenerator.getAvailableStyles();
-    styles.forEach(style => {
-      styleSelect.createEl('option', { 
-        text: `${this.getStyleEmoji(style.id)} ${style.name}`,
-        value: style.id 
-      });
-    });
-
-    styleSelect.addEventListener('change', (e) => {
-      this.selectedStyleId = (e.target as HTMLSelectElement).value;
+    // 简化的风格说明
+    const infoContainer = contentEl.createDiv({ cls: 'info-container' });
+    infoContainer.createEl('p', { 
+      text: '🌊 采用液态数字形态设计，具有动态渐变背景和玻璃形态效果',
+      cls: 'style-info'
     });
 
     // Preview container
@@ -695,13 +705,6 @@ class MagazineStyleModal extends Modal {
       cls: 'mod-cta'
     });
     previewButton.addEventListener('click', () => this.generatePreview());
-
-    const randomButton = buttonContainer.createEl('button', { text: '随机生成' });
-    randomButton.addEventListener('click', () => {
-      styleSelect.value = 'random';
-      this.selectedStyleId = 'random';
-      this.generatePreview();
-    });
     
     const closeButton = buttonContainer.createEl('button', { text: '关闭' });
     closeButton.addEventListener('click', () => this.close());
@@ -763,56 +766,22 @@ class MagazineStyleModal extends Modal {
     document.head.appendChild(style);
   }
 
-  private getStyleEmoji(styleId: string): string {
-    const emojiMap: { [key: string]: string } = {
-      'minimalist': '⚪',
-      'bold-modern': '⚡',
-      'elegant-vintage': '🎭',
-      'futuristic-tech': '🚀',
-      'scandinavian': '❄️',
-      'art-deco': '💎',
-      'japanese-minimalism': '🎋',
-      'postmodern-deconstruction': '🧩',
-      'punk': '🎸',
-      'british-rock': '🇬🇧',
-      'black-metal': '⚫',
-      'memphis-design': '🌈',
-      'cyberpunk': '🔮',
-      'pop-art': '🎨',
-      'deconstructed-swiss': '🏔️',
-      'vaporwave': '🌸',
-      'neo-expressionism': '🎭',
-      'extreme-minimalism': '⬜',
-      'neo-futurism': '✨',
-      'surrealist-collage': '🎪',
-      'neo-baroque': '👑',
-      'liquid-morphism': '💧',
-      'hypersensory-minimalism': '🔍',
-      'neo-expressionist-data': '📊',
-      'victorian': '🏛️',
-      'bauhaus': '🔺',
-      'constructivism': '🔴',
-      'german-expressionism': '🎬'
-    };
-    return emojiMap[styleId] || '🎨';
-  }
 
   private async generatePreview() {
     const loadingEl = this.previewContainer;
-    loadingEl.innerHTML = '<div class="loading-spinner"></div><p>正在生成预览...</p>';
+    loadingEl.innerHTML = '<div class="loading-spinner"></div><p>正在生成液态数字形态预览...</p>';
 
     try {
-      const styleId = this.selectedStyleId === 'random' ? undefined : this.selectedStyleId;
-      const imageBlob = await this.plugin.generateSpecificStyle(this.file, styleId || '');
+      const imageBlob = await this.plugin.generateSpecificStyle(this.file, 'liquid-morphism');
       
       // Convert blob to data URL for display
       const reader = new FileReader();
       reader.onload = (e) => {
         const imageUrl = e.target?.result as string;
         loadingEl.innerHTML = `
-          <img src="${imageUrl}" alt="Magazine Style Preview" class="preview-image" />
+          <img src="${imageUrl}" alt="Liquid Morphism Preview" class="preview-image" />
           <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-            风格: ${this.getSelectedStyleName()}
+            风格: 液态数字形态 (Liquid Digital Morphism)
           </div>
         `;
       };
@@ -824,15 +793,6 @@ class MagazineStyleModal extends Modal {
     }
   }
 
-  private getSelectedStyleName(): string {
-    if (this.selectedStyleId === 'random' || !this.selectedStyleId) {
-      return '随机风格';
-    }
-    
-    const styles = this.plugin.imageGenerator.getAvailableStyles();
-    const style = styles.find(s => s.id === this.selectedStyleId);
-    return style ? style.name : '未知风格';
-  }
 
   onClose() {
     const { contentEl } = this;

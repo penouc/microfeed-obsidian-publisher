@@ -40,6 +40,12 @@
   },
   "dependencies": {
     "canvas": "^2.11.2",
-    "html-to-image": "^1.11.11"
+    "html-to-image": "^1.11.11",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0"
   }
 }

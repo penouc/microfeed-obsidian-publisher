@@ -73,31 +73,53 @@ export class MicrofeedClient {
     return response.json;
   }
 
-  async uploadFile(presignedUrl: string, file: File | Blob): Promise<void> {
-    const arrayBuffer = await file.arrayBuffer();
+  async uploadFile(presignedUrl: string, file: File | Blob | ArrayBuffer): Promise<void> {
+    let bodyData: ArrayBuffer;
+    
+    if (file instanceof ArrayBuffer) {
+      console.log('📦 Using ArrayBuffer directly');
+      bodyData = file;
+    } else {
+      console.log('📦 Converting File/Blob to ArrayBuffer');
+      bodyData = await file.arrayBuffer();
+    }
+    
+    console.log(`📤 Uploading ${bodyData.byteLength} bytes to presigned URL`);
+    
     const response = await requestUrl({
       url: presignedUrl,
       method: 'PUT',
-      body: arrayBuffer,
+      body: bodyData,
     });
 
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`Failed to upload file: ${response.status}`);
     }
+    
+    console.log(`✅ Upload successful, response status: ${response.status}`);
   }
 
-  async uploadMediaFile(file: File | Blob, category: string, fileName: string, itemId?: string): Promise<string> {
+  async uploadMediaFile(file: File | Blob | ArrayBuffer, category: string, fileName: string, itemId?: string): Promise<string> {
     try {
+      console.log(`🔗 Getting presigned URL for: ${fileName}`);
+      
       // Get presigned URL
       const presignedResponse = await this.getPresignedUrl(category, fileName, itemId);
+      
+      console.log(`📋 Presigned URL obtained`);
+      console.log(`🎯 Upload URL: ${presignedResponse.presigned_url.substring(0, 100)}...`);
+      console.log(`📦 Future media URL: ${presignedResponse.media_url}`);
       
       // Upload file
       await this.uploadFile(presignedResponse.presigned_url, file);
       
+      console.log(`🎉 File upload completed successfully`);
+      
       // Return the media URL
       return presignedResponse.media_url;
     } catch (error) {
-      console.error('Error uploading media file:', error);
+      console.error('❌ Error uploading media file:', error);
+      console.error('📋 Error details:', error.message);
       throw error;
     }
   }
